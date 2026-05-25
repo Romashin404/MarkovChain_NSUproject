@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8"> <!---->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MarkovChain</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -13,14 +13,14 @@
             --white: #ffffff;
             --gray: rgb(223, 223, 223);
             --text-main: #2c3e50;
-            --text-muted: #7f8c8d;
+            --text-muted: #7f8d81;
             --border-color:#253566;
         }
 
         body { 
             font-family: 'Inter', sans-serif; 
             background: linear-gradient(90deg, #ffffff,#adecff); 
-            color: var(#03045e); 
+            color: #03155e; 
             margin: 0; 
             display: grid; 
             grid-template-columns: 350px 1fr; 
@@ -35,10 +35,31 @@
             padding: 25px; 
             border-radius: 20px; 
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
             overflow-y: auto; 
             position: sticky; 
             top: 20px; 
             height: calc(100vh - 100px);
+        }
+        .setting-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        }
+
+        .setting-group label {
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .setting-group input {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1.5px solid var(--sibir-blue);
+            font-size: 0.9rem;
+            outline: none;
+            box-sizing: border-box;
         }
         
         .main { 
@@ -67,6 +88,7 @@
             border-radius: 16px;
             font-size: 0.95rem;
             line-height: 1.4;
+            white-space: pre-line;
             word-wrap: break-word;
         }
 
@@ -106,8 +128,17 @@
 </head>
 <body>
     <div class="sidebar">
-        <h2 style="margin-top: auto;">Настройки:</h2>
+        <h2>Настройки:</h2>
+        <div class="setting-group">
+            <label for="contextSize">Количество слов в контексте</label>
+            <input type="number" id="contextSize" min="1" max="10" value="3">
+        </div>
+        <div class="setting-group">
+            <label for="responseLength">Длина ответа</label>
+            <input type="number" id="responseLength" min="1" max="200" value="50">
+        </div>
     </div>
+
     <div class="main">
         <div class="chat-messages" id="chatMessages">
             <div class="chat-empty" id="chatEmpty">Сообщений пока нет. Напишите что-нибудь!</div>
@@ -124,10 +155,19 @@
         const chatInput = document.getElementById('chatReplyInput');
         const chatEmpty = document.getElementById('chatEmpty');
         const STORAGE_KEY = 'markov_chat_messages';
+        const SETTINGS_KEY = 'markov_chat_settings';
+        const contextSizeInput = document.getElementById('contextSize');
+        const responseLengthInput = document.getElementById('responseLength');
 
-        document.addEventListener('DOMContentLoaded', loadMessages);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMessages();
+            loadSettings();
+        });
 
-        function sendChatReply() {
+        contextSizeInput.addEventListener('input', saveSettings);
+        responseLengthInput.addEventListener('input', saveSettings);
+
+        async function sendChatReply() {
             const text = chatInput.value.trim();
             if (!text) return;
 
@@ -142,11 +182,16 @@
             //скрываем заглушку
             if (chatEmpty) chatEmpty.style.display = 'none';
 
-            const botResponse = generateBotResponse(text); 
-                if (botResponse) {
-                    addMessage(botResponse, 'bot');
-                    saveMessages();
-                }
+            const settings = {
+                order: Number(contextSizeInput.value),
+                length: Number(responseLengthInput.value)
+            };
+
+            const botResponse = await generateBotResponse(text, settings); 
+            if (botResponse) {
+                addMessage(botResponse, 'bot');
+                saveMessages();
+            }
         }
 
         function addMessage(text, sender) {
@@ -179,14 +224,48 @@
                 }
             }
         }
+
+        function saveSettings() {
+            const settings = {
+                order: Number(contextSizeInput.value),
+                length: Number(responseLengthInput.value)
+            };
+
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const stored = localStorage.getItem(SETTINGS_KEY);
+
+            if (!stored) return;
+
+            const settings = JSON.parse(stored);
+
+            if (settings.order !== undefined) {
+                contextSizeInput.value = settings.order;
+            }
+
+            if (settings.length !== undefined) {
+                responseLengthInput.value = settings.length;
+            }
+        }
+
         chatInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
 
-        function generateBotResponse(userText) {
-            return `Вы написали: "${userText}"`; 
-        }
+        async function generateBotResponse(userText, settings) {
+            const response = await fetch("http://127.0.0.1:8000/api/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({message: userText, length: settings.length, order: settings.order})
+        });
+
+        const data = await response.json();
+
+        return data.reply;
+    }
     </script>
 </body>
 </html>
